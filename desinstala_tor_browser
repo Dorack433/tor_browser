@@ -1,0 +1,163 @@
+#!/bin/bash
+#
+# Script para remover completamente o Tor Browser
+#
+
+DESTINO="/opt/tor-browser"
+DESKTOP_USER="${SUDO_USER:-$USER}"
+DESKTOP_FILE="/home/$DESKTOP_USER/.local/share/applications/start-tor-browser.desktop"
+DESKTOP_FILE_ROOT="/root/.local/share/applications/start-tor-browser.desktop"
+SYSTEM_DESKTOP="/usr/share/applications/start-tor-browser.desktop"
+CACHE_DIR="/home/$DESKTOP_USER/.cache/tor-browser"
+CONFIG_DIR="/home/$DESKTOP_USER/.tor-browser"
+TMP_TOR_FILES="/tmp/tor-browser-*"
+
+# ---------------------------
+# 1) Precisa ser root
+# ---------------------------
+if [[ $EUID -ne 0 ]]; then
+    echo "[!] Execute como root: sudo $0"
+    echo "    Para desinstalar completamente todos os arquivos"
+    exit 1
+fi
+
+echo "[*] Iniciando desinstalação do Tor Browser..."
+echo
+
+# ---------------------------
+# 2) Confirmar com o usuário
+# ---------------------------
+read -p "Tem certeza que deseja remover completamente o Tor Browser? (s/N): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+    echo "[*] Desinstalação cancelada."
+    exit 0
+fi
+
+# ---------------------------
+# 3) Parar processos do Tor Browser
+# ---------------------------
+echo "[*] Parando processos do Tor Browser..."
+pkill -f "tor-browser" 2>/dev/null || true
+pkill -f "firefox" 2>/dev/null || true
+pkill -f "Tor Browser" 2>/dev/null || true
+sleep 2
+
+# ---------------------------
+# 4) Remover instalação principal
+# ---------------------------
+if [[ -d "$DESTINO" ]]; then
+    echo "[*] Removendo instalação de $DESTINO..."
+    rm -rf "$DESTINO"
+    echo "[✓] Diretório principal removido."
+else
+    echo "[ ] Nenhuma instalação encontrada em $DESTINO"
+fi
+
+# ---------------------------
+# 5) Remover atalhos do menu
+# ---------------------------
+echo "[*] Removendo atalhos do menu..."
+
+# Remover do usuário atual
+if [[ -f "$DESKTOP_FILE" ]]; then
+    rm -f "$DESKTOP_FILE"
+    echo "[✓] Atalho do usuário $DESKTOP_USER removido."
+fi
+
+# Remover do root (se existir)
+if [[ -f "$DESKTOP_FILE_ROOT" ]]; then
+    rm -f "$DESKTOP_FILE_ROOT"
+    echo "[✓] Atalho do root removido."
+fi
+
+# Remover do sistema (se existir)
+if [[ -f "$SYSTEM_DESKTOP" ]]; then
+    rm -f "$SYSTEM_DESKTOP"
+    echo "[✓] Atalho do sistema removido."
+fi
+
+# ---------------------------
+# 6) Remover cache e configurações
+# ---------------------------
+echo "[*] Removendo arquivos de cache e configuração..."
+
+# Cache do usuário
+if [[ -d "$CACHE_DIR" ]]; then
+    rm -rf "$CACHE_DIR"
+    echo "[✓] Cache do usuário removido."
+fi
+
+# Configurações do usuário
+if [[ -d "$CONFIG_DIR" ]]; then
+    rm -rf "$CONFIG_DIR"
+    echo "[✓] Configurações do usuário removidas."
+fi
+
+# Configurações de outros usuários (se root estiver executando)
+for user_home in /home/*; do
+    if [[ -d "$user_home" ]]; then
+        user_cache="$user_home/.cache/tor-browser"
+        user_config="$user_home/.tor-browser"
+        user_desktop="$user_home/.local/share/applications/start-tor-browser.desktop"
+        
+        if [[ -d "$user_cache" ]]; then
+            rm -rf "$user_cache"
+            echo "[✓] Cache de $(basename "$user_home") removido."
+        fi
+        
+        if [[ -d "$user_config" ]]; then
+            rm -rf "$user_config"
+            echo "[✓] Configurações de $(basename "$user_home") removidas."
+        fi
+        
+        if [[ -f "$user_desktop" ]]; then
+            rm -f "$user_desktop"
+            echo "[✓] Atalho de $(basename "$user_home") removido."
+        fi
+    fi
+done
+
+# ---------------------------
+# 7) Remover arquivos temporários
+# ---------------------------
+echo "[*] Limpando arquivos temporários..."
+rm -rf $TMP_TOR_FILES 2>/dev/null || true
+
+# ---------------------------
+# 8) Remover do banco de dados de aplicações
+# ---------------------------
+echo "[*] Removendo do banco de dados de aplicações..."
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+    update-desktop-database /home/*/.local/share/applications 2>/dev/null || true
+    echo "[✓] Banco de dados de aplicações atualizado."
+fi
+
+# ---------------------------
+# 9) Verificar por processos remanescentes
+# ---------------------------
+echo "[*] Verificando processos remanescentes..."
+if pgrep -f "tor-browser\|Tor Browser" >/dev/null; then
+    echo "[!] Aviso: Ainda há processos do Tor Browser em execução."
+    echo "    Execute 'pkill -f \"tor-browser\|Tor Browser\"' para forçar a parada."
+fi
+
+# ---------------------------
+# 10) Relatório final
+# ---------------------------
+echo
+echo "=========================================="
+echo "[✓] DESINSTALAÇÃO COMPLETA!"
+echo "=========================================="
+echo
+echo "O Tor Browser foi removido completamente:"
+echo "  ✓ Instalação principal em /opt"
+echo "  ✓ Atalhos do menu"
+echo "  ✓ Cache e configurações do usuário"
+echo "  ✓ Arquivos temporários"
+echo
+echo "Para reinstalar, execute o script de instalação novamente."
+echo
+
+exit 0
