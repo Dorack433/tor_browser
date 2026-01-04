@@ -2,41 +2,64 @@
 
 LINK="https://www.torproject.org/dist/torbrowser/15.0.3/tor-browser-linux-x86_64-15.0.3.tar.xz"
 DESTINO="/opt/tor-browser"
-TMP_ARQUIVO="/tmp/tor-browser.tar.xz"
+TMPDIR="$(mktemp -d)"
 
 # Precisa ser root
 if [[ $EUID -ne 0 ]]; then
-    echo "[!] Execute como root (sudo)."
+    echo "[!] Execute como root: sudo $0"
     exit 1
 fi
 
-# Dependências
+echo "[*] Verificando dependências..."
 for pkg in wget tar; do
-    command -v "$pkg" >/dev/null 2>&1 || { 
-        echo "[!] O pacote '$pkg' não está instalado."; 
-        exit 1; 
+    command -v "$pkg" >/dev/null 2>&1 || {
+        echo "[!] O pacote '$pkg' não está instalado."
+        exit 1
     }
 done
 
+echo "[*] Verificando se já existe Tor Browser instalado..."
+
+# remove instalação anterior se existir
+if [[ -d "$DESTINO" ]]; then
+    echo "[*] Removendo instalação existente em $DESTINO ..."
+    rm -rf "$DESTINO"
+fi
+
+# remove possíveis atalhos antigos
+if [[ -f "$HOME/.local/share/applications/start-tor-browser.desktop" ]]; then
+    echo "[*] Removendo atalho antigo do menu..."
+    rm -f "$HOME/.local/share/applications/start-tor-browser.desktop"
+fi
+
 echo "[*] Baixando Tor Browser..."
-wget -O "$TMP_ARQUIVO" "$LINK" || { echo "[!] Erro no download!"; exit 1; }
+wget -O "$TMPDIR/tor-browser.tar.xz" "$LINK" || { 
+    echo "[!] Erro no download!"; 
+    exit 1; 
+}
 
-echo "[*] Extraindo arquivos..."
-tar -xf "$TMP_ARQUIVO" -C /tmp || { echo "[!] Erro ao extrair!"; exit 1; }
+echo "[*] Extraindo..."
+tar -xf "$TMPDIR/tor-browser.tar.xz" -C "$TMPDIR" || { 
+    echo "[!] Erro ao extrair!"; 
+    exit 1; 
+}
 
-# A pasta extraída normalmente chama "tor-browser"
-echo "[*] Movendo para $DESTINO ..."
+echo "[*] Movendo para $DESTINO..."
 rm -rf "$DESTINO"
-mv /tmp/tor-browser "$DESTINO" || { echo "[!] Não foi possível mover para $DESTINO"; exit 1; }
+mv "$TMPDIR/tor-browser" "$DESTINO" || {
+    echo "[!] Falha ao mover para $DESTINO"
+    exit 1
+}
 
-# Garante permissão de execução
 chmod +x "$DESTINO/start-tor-browser.desktop"
 
 echo "[*] Registrando aplicação no sistema..."
 cd "$DESTINO" || exit 1
-./start-tor-browser.desktop --register-app || { echo "[!] Falha ao registrar a aplicação!"; exit 1; }
+./start-tor-browser.desktop --register-app || {
+    echo "[!] Falha ao registrar a aplicação!"
+    exit 1
+}
 
-echo
 echo "[✓] Tor Browser instalado e registrado com sucesso!"
 echo "Abra pelo menu do sistema ou execute:"
 echo "$DESTINO/start-tor-browser.desktop"
