@@ -1,0 +1,21 @@
+#!/bin/bash
+
+LINK="https://www.torproject.org/dist/torbrowser/15.0.3/tor-browser-linux-x86_64-15.0.3.tar.xz"
+DESTINO="/opt/tor-browser"
+
+echo "[*] Baixando Tor Browser..."
+wget -O /tmp/tor-browser.tar.xz "$LINK" || { echo "Erro no download!"; exit 1; }
+
+echo "[*] Extraindo arquivos..."
+tar -xf /tmp/tor-browser.tar.xz -C /tmp || { echo "Erro ao extrair!"; exit 1; }
+
+echo "[*] Movendo para $DESTINO ..."
+rm -rf "$DESTINO"
+mv /tmp/tor-browser "$DESTINO"
+
+echo "[*] Registrando aplicação no sistema..."
+"$DESTINO/start-tor-browser.desktop" --register-app
+
+echo "[✓] Tor Browser instalado e registrado!"
+echo "Você pode abrir pelo menu do sistema ou executando:"
+echo "$DESTINO/start-tor-browser.desktop"
