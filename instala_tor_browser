@@ -1,17 +1,28 @@
 #!/bin/bash
+#
+# Instalador/Atualizador do Tor Browser (reinstala automaticamente se já existir)
+#
 
 LINK="https://www.torproject.org/dist/torbrowser/15.0.3/tor-browser-linux-x86_64-15.0.3.tar.xz"
 DESTINO="/opt/tor-browser"
 TMPDIR="$(mktemp -d)"
+DESKTOP_USER="${SUDO_USER:-$USER}"
+DESKTOP_FILE="/home/$DESKTOP_USER/.local/share/applications/start-tor-browser.desktop"
 
-# Precisa ser root
+# ---------------------------
+# 1) Precisa ser root
+# ---------------------------
 if [[ $EUID -ne 0 ]]; then
     echo "[!] Execute como root: sudo $0"
     exit 1
 fi
 
-USUARIO_REAL="${SUDO_USER:-$USER}"
+echo "[✓] Usuário gráfico detectado: $DESKTOP_USER"
+echo
 
+# ---------------------------
+# 2) Conferir dependências
+# ---------------------------
 echo "[*] Verificando dependências..."
 for pkg in wget tar; do
     command -v "$pkg" >/dev/null 2>&1 || {
@@ -20,23 +31,64 @@ for pkg in wget tar; do
     }
 done
 
-echo "[*] Removendo instalação anterior (se existir)..."
-rm -rf "$DESTINO"
+# ---------------------------
+# 3) Remover instalação anterior (se houver)
+# ---------------------------
+if [[ -d "$DESTINO" ]]; then
+    echo "[!] Tor Browser já encontrado em $DESTINO"
+    echo "[*] Removendo instalação antiga..."
+    rm -rf "$DESTINO"
+fi
 
+if [[ -f "$DESKTOP_FILE" ]]; then
+    echo "[*] Removendo atalho antigo do menu..."
+    rm -f "$DESKTOP_FILE"
+fi
+
+# ---------------------------
+# 4) Download
+# ---------------------------
 echo "[*] Baixando Tor Browser..."
 wget -O "$TMPDIR/tor-browser.tar.xz" "$LINK" || { echo "[!] Erro no download!"; exit 1; }
 
+# ---------------------------
+# 5) Extração
+# ---------------------------
 echo "[*] Extraindo..."
 tar -xf "$TMPDIR/tor-browser.tar.xz" -C "$TMPDIR" || { echo "[!] Erro ao extrair!"; exit 1; }
 
+# ---------------------------
+# 6) Instalação em /opt
+# ---------------------------
 echo "[*] Movendo para $DESTINO..."
 mv "$TMPDIR/tor-browser" "$DESTINO" || { echo "[!] Erro ao mover!"; exit 1; }
 
+# ---------------------------
+# 7) Permissões corretas
+# ---------------------------
+echo "[*] Ajustando permissões..."
+chown -R root:root "$DESTINO"
+chmod -R a+rX "$DESTINO"
 chmod +x "$DESTINO/start-tor-browser.desktop"
 
-echo "[*] Registrando aplicação para o usuário $USUARIO_REAL ..."
-sudo -u "$USUARIO_REAL" bash -c "cd '$DESTINO' && ./start-tor-browser.desktop --register-app"
+# ---------------------------
+# 8) Registrar no menu (como usuário gráfico)
+# ---------------------------
+echo "[*] Registrando aplicação no sistema para o usuário $DESKTOP_USER ..."
+sudo -u "$DESKTOP_USER" bash -c "cd '$DESTINO' && ./start-tor-browser.desktop --register-app" \
+    || { echo '[!] Falha ao registrar a aplicação!'; exit 1; }
 
-echo "[✓] Tor Browser instalado e registrado com sucesso!"
-echo "Abra pelo menu do sistema ou execute:"
-echo "$DESTINO/start-tor-browser.desktop"
+# ---------------------------
+# 9) Verificação final
+# ---------------------------
+if [[ -f "$DESKTOP_FILE" ]]; then
+    echo
+    echo "[✓] Tor Browser instalado e registrado com sucesso!"
+    echo "Abra pelo menu do sistema ou execute:"
+    echo "  $DESTINO/start-tor-browser.desktop"
+else
+    echo "[!] Algo deu errado: o atalho não foi criado."
+    echo "Verifique: $DESKTOP_FILE"
+fi
+
+exit 0
